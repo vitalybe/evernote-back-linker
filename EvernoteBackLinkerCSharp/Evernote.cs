@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using Evernote.EDAM.Error;
 using Evernote.EDAM.NoteStore;
 using Evernote.EDAM.UserStore;
 using Thrift.Protocol;
 using Thrift.Transport;
+using EvernoteSDK = Evernote;
 
 namespace EvernoteBackLinkerCSharp
 {
@@ -106,6 +108,27 @@ namespace EvernoteBackLinkerCSharp
             }
 
             return externalNote;
+        }
+
+        public IEnumerable<EvernoteNote> GetRecentlyChangedNotes(TimeSpan lastModifiedTimeSpan)
+        {
+            NoteFilter filter = new NoteFilter();
+            filter.Words  = "updated:day-" + Math.Round(lastModifiedTimeSpan.TotalDays);
+            NotesMetadataResultSpec spec = new NotesMetadataResultSpec { IncludeTitle = true };
+
+            int offset = 0;
+            int pageSize = 10;
+            NotesMetadataList notes = null;
+
+            do
+            {
+                notes = NoteStore.findNotesMetadata(Consts.EvernoteDevToken, filter, offset, pageSize, spec);
+                foreach (NoteMetadata note in notes.Notes)
+                {
+                    yield return FindById(note.Guid);
+                }
+                offset = offset + notes.Notes.Count;
+            } while (notes.TotalNotes > offset);
         }
     }
 }

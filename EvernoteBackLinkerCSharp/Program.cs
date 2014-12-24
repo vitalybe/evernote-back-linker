@@ -11,9 +11,21 @@ namespace EvernoteBackLinkerCSharp
         static void Main(string[] args)
         {
             Evernote evernote = new Evernote();
-            var note = evernote.FindById("f8b526ec-211a-42a4-9852-38b3a8afcae1");
-            Console.WriteLine("Prcessing note: " + note.Title);
             
+            // For note debugging:
+            //ProcessNote(evernote.FindById("f8b526ec-211a-42a4-9852-38b3a8afcae1"), evernote);
+            //return;
+
+            foreach (var note in evernote.GetRecentlyChangedNotes(TimeSpan.FromDays(365*10)))
+            {
+                ProcessNote(note, evernote);
+            }
+        }
+
+        private static void ProcessNote(EvernoteNote note, Evernote evernote)
+        {
+            Console.WriteLine("Prcessing note: " + note.Title);
+
             var noteLinks = note.FindNoteLinks();
             foreach (var noteLink in noteLinks)
             {
@@ -30,8 +42,6 @@ namespace EvernoteBackLinkerCSharp
                     Console.WriteLine("Backlink already exists");
                 }
             }
-
-            //note.AddBacklink("From C#!", "https://www.evernote.com/shard/s6/nl/731386/d87d2d13-1982-4279-b630-dee24a176f10");
         }
     }
 }

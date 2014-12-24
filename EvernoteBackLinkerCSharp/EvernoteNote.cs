@@ -69,7 +69,7 @@ namespace EvernoteBackLinkerCSharp
             HtmlDocument doc = new HtmlDocument();
             doc.LoadHtml(Content);
             
-            var backlinkNodes = doc.DocumentNode.SelectNodes("/en-note/div[a and starts-with(.,'[[[Backlink')]");
+            var backlinkNodes = doc.DocumentNode.SelectNodes("/en-note//div[a and starts-with(.,'[[[Backlink')]");
             backlinkNodes = backlinkNodes ?? new HtmlNodeCollection(null);
 
             var backlinks = from potentialBacklink in backlinkNodes
