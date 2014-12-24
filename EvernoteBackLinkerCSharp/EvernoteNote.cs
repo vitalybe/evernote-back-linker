@@ -64,6 +64,22 @@ namespace EvernoteBackLinkerCSharp
             }
         }
 
+        public DateTime Updated
+        {
+            get
+            {
+                return UnixTimeStampToDateTime(_note.Updated);
+            }
+        }
+
+        private static DateTime UnixTimeStampToDateTime(long unixTimeStamp)
+        {
+            // Unix timestamp is seconds past epoch
+            DateTime dtDateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, System.DateTimeKind.Utc);
+            dtDateTime = dtDateTime.AddMilliseconds(unixTimeStamp).ToLocalTime();
+            return dtDateTime;
+        }
+
         public IEnumerable<NoteLink> FindBacklinks()
         {
             HtmlDocument doc = new HtmlDocument();

@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using Evernote.EDAM.Error;
 using Evernote.EDAM.NoteStore;
+using Evernote.EDAM.Type;
 using Evernote.EDAM.UserStore;
 using Thrift.Protocol;
 using Thrift.Transport;
+using Constants = Evernote.EDAM.UserStore.Constants;
 using EvernoteSDK = Evernote;
 
 namespace EvernoteBackLinkerCSharp
@@ -113,6 +115,8 @@ namespace EvernoteBackLinkerCSharp
         public IEnumerable<EvernoteNote> GetRecentlyChangedNotes(TimeSpan lastModifiedTimeSpan)
         {
             NoteFilter filter = new NoteFilter();
+            filter.Ascending = true;
+            filter.Order = (int)NoteSortOrder.UPDATED;
             filter.Words  = "updated:day-" + Math.Round(lastModifiedTimeSpan.TotalDays);
             NotesMetadataResultSpec spec = new NotesMetadataResultSpec { IncludeTitle = true };
 
