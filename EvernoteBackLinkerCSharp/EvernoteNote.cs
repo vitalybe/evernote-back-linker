@@ -6,17 +6,35 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Evernote.EDAM.NoteStore;
 using Evernote.EDAM.Type;
+using EvernoteBackLinkerCSharp.Misc;
 using HtmlAgilityPack;
 
 namespace EvernoteBackLinkerCSharp
 {
-    struct Backlink
+    struct NoteLink
     {
-        public const string Prefix = "[[[Backlink:&nbsp;";
-        public const string Sufix = "]]]";
-
+        private string _url;
         public string Title { get; set; }
-        public string Url { get; set; }
+
+        public string Url
+        {
+            get { return _url; }
+            set
+            {
+                string internalUrl;
+                if (value.StartsWith(Consts.ExternalNoteUrlPrefix))
+                {
+                    var guid = value.Replace(Consts.ExternalNoteUrlPrefix, "");
+                    internalUrl = String.Format("{0}{1}/{1}", Consts.ExternalNoteUrlPrefix, guid);
+                }
+                else
+                {
+                    internalUrl = value;
+                }
+
+                _url = internalUrl;
+            }
+        }
     }
 
 
@@ -51,7 +69,7 @@ namespace EvernoteBackLinkerCSharp
             }
         }
 
-        public IEnumerable<Backlink> FindBacklinks()
+        public IEnumerable<NoteLink> FindBacklinks()
         {
             HtmlDocument doc = new HtmlDocument();
             doc.LoadHtml(Content);
@@ -61,11 +79,25 @@ namespace EvernoteBackLinkerCSharp
                             let prefix = childNodes[0]
                             let a = childNodes[1]
                             let sufix = childNodes[2]
-                            where prefix.InnerText == Backlink.Prefix && sufix.InnerText == Backlink.Sufix
+                            where prefix.InnerText == Consts.BacklinkPrefix && sufix.InnerText == Consts.BacklinkSufix
                             where a.Name == "a" && prefix.Name == "#text" && sufix.Name == "#text"
-                            select new Backlink { Title = a.InnerText, Url = a.Attributes["href"].Value };
+                            select new NoteLink { Title = a.InnerText, Url = a.Attributes["href"].Value };
 
-            return backlinks.ToList();
+            return backlinks;
+        }
+
+        public IEnumerable<NoteLink> FindNoteLinks()
+        {
+            HtmlDocument doc = new HtmlDocument();
+            doc.LoadHtml(Content);
+            
+            var noteLinksXpath = string.Format("//a[starts-with(@href, '{0}') or starts-with(@href, '{1}')]", 
+                Consts.ExternalNoteUrlPrefix, Consts.InternalNoteUrlPrefix);
+            var noteLinks = from potentialLinks in doc.DocumentNode.SelectNodes(noteLinksXpath)
+                            select new NoteLink  { Title = potentialLinks.InnerText, Url = potentialLinks.Attributes["href"].Value };
+
+            var backlinks = FindBacklinks();
+            return noteLinks.Except(backlinks, (link, banklink) => link.Url == banklink.Url).ToList();
         }
 
 
@@ -80,7 +112,7 @@ namespace EvernoteBackLinkerCSharp
         public void AddBacklink(string linkTitle, string linkUrl)
         {
             var backlinkHtml = string.Format("<div>{0}<a href='{1}' style='color:#69aa35'>{2}</a>{3}</div>", 
-                Backlink.Prefix, linkUrl, linkTitle, Backlink.Sufix);
+                Consts.BacklinkPrefix, linkUrl, linkTitle, Consts.BacklinkSufix);
             this.Content = AppendToContent(backlinkHtml);
         }
 
