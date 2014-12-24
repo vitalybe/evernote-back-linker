@@ -7,7 +7,7 @@ using Thrift.Transport;
 
 namespace EvernoteBackLinkerCSharp
 {
-    class EvernoteNoteSource
+    class Evernote
     {
         // Can be be initialized after authentication is complete.
         private NoteStore.Client _noteStore;
@@ -18,6 +18,8 @@ namespace EvernoteBackLinkerCSharp
             {
                 if (_noteStore == null)
                 {
+                    Console.WriteLine("Connecting to Evernote...");
+
                     //String evernoteHost = "sandbox.evernote.com";
                     const string EVERNOTE_HOST = "www.evernote.com";
                     Uri userStoreUrl = new Uri("https://" + EVERNOTE_HOST + "/edam/user");
@@ -29,7 +31,6 @@ namespace EvernoteBackLinkerCSharp
                         userStore.checkVersion("Evernote EDAMTest (C#)",
                            Constants.EDAM_VERSION_MAJOR,
                            Constants.EDAM_VERSION_MINOR);
-                    Console.WriteLine("Is my Evernote API version up to date? " + versionOk);
                     if (!versionOk)
                     {
                         throw new Exception("EDAM SDK version is not recent enough. Please update via nuget");

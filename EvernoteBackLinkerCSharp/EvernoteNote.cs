@@ -11,30 +11,25 @@ using HtmlAgilityPack;
 
 namespace EvernoteBackLinkerCSharp
 {
-    struct NoteLink
+    class NoteLink
     {
-        private string _url;
-        public string Title { get; set; }
-
-        public string Url
+        public NoteLink(string text, string url)
         {
-            get { return _url; }
-            set
+            // The / must exist in the end of the URL. I'm removing it just to find the guid:
+            // evernote:///view/731386/s6/af0d84a6-9260-45df-8ebc-99c6bcdfc3fa/af0d84a6-9260-45df-8ebc-99c6bcdfc3fa/
+            url = url.Trim('/');
+            Guid = url.Substring(url.LastIndexOf("/", StringComparison.Ordinal) + 1);
+            Url = EvernoteNote.NoteGuidToUrl(Guid);
+            Text = text;
+            if (string.IsNullOrWhiteSpace(Guid))
             {
-                string internalUrl;
-                if (value.StartsWith(Consts.ExternalNoteUrlPrefix))
-                {
-                    var guid = value.Replace(Consts.ExternalNoteUrlPrefix, "");
-                    internalUrl = String.Format("{0}{1}/{1}", Consts.ExternalNoteUrlPrefix, guid);
-                }
-                else
-                {
-                    internalUrl = value;
-                }
-
-                _url = internalUrl;
+                throw new Exception("Guid can not be empty.");
             }
         }
+        
+        public string Text { get; private set; }
+        public string Url { get; private set; }
+        public string Guid { get; private set; }
     }
 
 
@@ -73,7 +68,11 @@ namespace EvernoteBackLinkerCSharp
         {
             HtmlDocument doc = new HtmlDocument();
             doc.LoadHtml(Content);
-            var backlinks = from potentialBacklink in doc.DocumentNode.SelectNodes("/en-note/div[a and starts-with(.,'[[[Backlink')]")
+            
+            var backlinkNodes = doc.DocumentNode.SelectNodes("/en-note/div[a and starts-with(.,'[[[Backlink')]");
+            backlinkNodes = backlinkNodes ?? new HtmlNodeCollection(null);
+
+            var backlinks = from potentialBacklink in backlinkNodes
                             let childNodes = potentialBacklink.ChildNodes
                             where childNodes.Count() == 3
                             let prefix = childNodes[0]
@@ -81,9 +80,16 @@ namespace EvernoteBackLinkerCSharp
                             let sufix = childNodes[2]
                             where prefix.InnerText == Consts.BacklinkPrefix && sufix.InnerText == Consts.BacklinkSufix
                             where a.Name == "a" && prefix.Name == "#text" && sufix.Name == "#text"
-                            select new NoteLink { Title = a.InnerText, Url = a.Attributes["href"].Value };
+                            select new NoteLink (text: a.InnerText, url: a.Attributes["href"].Value);
 
-            return backlinks;
+            return UniqueNoteLinks(backlinks);
+        }
+
+        private static IEnumerable<NoteLink> UniqueNoteLinks(IEnumerable<NoteLink> backlinks)
+        {
+            return from backlink in backlinks
+                group backlink by backlink.Url into groupedLinks
+                select new NoteLink(groupedLinks.First().Text, groupedLinks.Key);
         }
 
         public IEnumerable<NoteLink> FindNoteLinks()
@@ -93,17 +99,23 @@ namespace EvernoteBackLinkerCSharp
             
             var noteLinksXpath = string.Format("//a[starts-with(@href, '{0}') or starts-with(@href, '{1}')]", 
                 Consts.ExternalNoteUrlPrefix, Consts.InternalNoteUrlPrefix);
-            var noteLinks = from potentialLinks in doc.DocumentNode.SelectNodes(noteLinksXpath)
-                            select new NoteLink  { Title = potentialLinks.InnerText, Url = potentialLinks.Attributes["href"].Value };
 
+            var potentialLinksNodes = doc.DocumentNode.SelectNodes(noteLinksXpath);
+            potentialLinksNodes = potentialLinksNodes ?? new HtmlNodeCollection(null);
+
+            var noteLinks = from potentialLinks in potentialLinksNodes
+                            select new NoteLink (text: potentialLinks.InnerText, url: potentialLinks.Attributes["href"].Value );
+            
+            noteLinks = UniqueNoteLinks(noteLinks);
+            
             var backlinks = FindBacklinks();
-            return noteLinks.Except(backlinks, (link, banklink) => link.Url == banklink.Url).ToList();
+            return noteLinks.Except(backlinks, (link, banklink) => link.Url == banklink.Url);
         }
 
 
         private string AppendToContent(string addedContent)
         {
-            Regex enNoteRegex = new Regex("(<en-note .+?>)");
+            Regex enNoteRegex = new Regex("(<en-note.+?>)");
             var replacement = "$1" + addedContent.Replace("$", "$$");
 
             return enNoteRegex.Replace(_note.Content, replacement);
@@ -111,7 +123,7 @@ namespace EvernoteBackLinkerCSharp
 
         public void AddBacklink(string linkTitle, string linkUrl)
         {
-            var backlinkHtml = string.Format("<div>{0}<a href='{1}' style='color:#69aa35'>{2}</a>{3}</div>", 
+            var backlinkHtml = string.Format("<div>{0}<a href='{1}' style='color:#69aa35'>{2}</a>{3}</div><br/>", 
                 Consts.BacklinkPrefix, linkUrl, linkTitle, Consts.BacklinkSufix);
             this.Content = AppendToContent(backlinkHtml);
         }
@@ -127,33 +139,13 @@ namespace EvernoteBackLinkerCSharp
         {
             get
             {
-                string shard = GetShardFromToken(Consts.EvernoteDevToken);
-                return string.Format("https://www.evernote.com/shard/{0}/edit/notebook/{1}", shard, _note.Guid);
+                return NoteGuidToUrl(_note.Guid);
             }
         }
 
-        /// <summary>
-        /// Gets the shard from token.
-        /// E.g from S=s6:U=b28fa:E=14526ceas8f:C=13dcf1d7f91:P=185:A=vitalyb-4494:V=2:H=bd19cea547f7adc32e3466f96b923dd6
-        /// Returns s6
-        /// </summary>
-        /// <param name="evernoteToken">The evernote token.</param>
-        /// <returns></returns>
-        /// <exception cref="System.NotImplementedException">Thrown if fails to extract the shard from the token</exception>
-        private static string GetShardFromToken(string evernoteToken)
+        public static string NoteGuidToUrl(string guid)
         {
-            var match = Regex.Match(evernoteToken, "^S=(s[0-9]+):");
-            if (match.Success == false)
-            {
-                throw new Exception("Failed to extract shard from the token");
-            }
-
-            return match.Groups[1].Value;
-        }
-
-        public void Open()
-        {
-            Process.Start(Url);
+            return String.Format("{0}{1}/{1}/", Consts.InternalNoteUrlPrefix, guid);
         }
     }
 }

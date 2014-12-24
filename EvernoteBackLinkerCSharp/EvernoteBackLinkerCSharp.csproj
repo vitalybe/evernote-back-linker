@@ -53,7 +53,7 @@
   <ItemGroup>
     <Compile Include="Consts.cs" />
     <Compile Include="EvernoteNote.cs" />
-    <Compile Include="EvernoteNoteSource.cs" />
+    <Compile Include="Evernote.cs" />
     <Compile Include="Misc\ExceptExtension.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
