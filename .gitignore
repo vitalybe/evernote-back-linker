@@ -1,2 +1,4 @@
 EvernoteBackLinkerCSharp/bin
 EvernoteBackLinkerCSharp/obj
+.git.bfg-report
+*.csproj.user

@@ -55,6 +55,7 @@
     <Compile Include="EvernoteNote.cs" />
     <Compile Include="Evernote.cs" />
     <Compile Include="Misc\ExceptExtension.cs" />
+    <Compile Include="NoteLink.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

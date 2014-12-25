@@ -13,8 +13,21 @@ namespace EvernoteBackLinkerCSharp
     {
         static void Main(string[] args)
         {
-            const string LAST_PROCESSED_UPDATE_DATE_FILE = "LastUpdateTime.txt";
 
+            if (args.Length < 1)
+            {
+                Console.WriteLine("To execute, please supply a dev token, e.g: ");
+                Console.WriteLine("\tEvernoteBackLinkerCSharp.exe S=s6:U=b...");
+                Environment.ExitCode = 1;
+                return;
+            }
+
+            ProcessNotes(args[0]);
+        }
+
+        private static void ProcessNotes(string devToken)
+        {
+            const string LAST_PROCESSED_UPDATE_DATE_FILE = "LastUpdateTime.txt";
 
             // For note debugging:
             //ProcessNote(evernote.FindById("f8b526ec-211a-42a4-9852-38b3a8afcae1"), evernote);
@@ -25,23 +38,31 @@ namespace EvernoteBackLinkerCSharp
             {
                 try
                 {
-                    Evernote evernote = new Evernote();
+                    Evernote evernote = new Evernote(devToken);
                     var noteProcessingSpan = GetNoteProcessingSpan(LAST_PROCESSED_UPDATE_DATE_FILE);
 
                     ProcessNotes(LAST_PROCESSED_UPDATE_DATE_FILE, noteProcessingSpan, evernote);
+                    Console.WriteLine("Processing done");
                     processingDone = true;
                 }
                 catch (EDAMSystemException e)
                 {
-                    if (e.ErrorCode == (EDAMErrorCode)19)
+                    if (e.ErrorCode == (EDAMErrorCode) 19)
                     {
-                        Console.WriteLine("ERROR - Evernote quota reached. Wil tray again after a while: " + DateTime.Now.ToShortTimeString());
+                        Console.WriteLine("ERROR - Evernote quota reached. Will try again after a while: " +
+                                          DateTime.Now.ToShortTimeString());
                         Thread.Sleep(TimeSpan.FromMinutes(15));
                     }
                     else
                     {
                         throw;
                     }
+                }
+                catch (EDAMUserException e)
+                {
+                    Console.WriteLine("Login failed, make sure your token is correct. Error code: " + e.ErrorCode);
+                    Environment.ExitCode = 1;
+                    processingDone = true;
                 }
             }
         }

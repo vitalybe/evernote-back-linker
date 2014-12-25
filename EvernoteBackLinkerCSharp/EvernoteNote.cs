@@ -6,41 +6,32 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Evernote.EDAM.NoteStore;
 using Evernote.EDAM.Type;
+using Evernote.EDAM.UserStore;
 using EvernoteBackLinkerCSharp.Misc;
 using HtmlAgilityPack;
 
 namespace EvernoteBackLinkerCSharp
 {
-    class NoteLink
-    {
-        public NoteLink(string text, string url)
-        {
-            // The / must exist in the end of the URL. I'm removing it just to find the guid:
-            // evernote:///view/731386/s6/af0d84a6-9260-45df-8ebc-99c6bcdfc3fa/af0d84a6-9260-45df-8ebc-99c6bcdfc3fa/
-            url = url.Trim('/');
-            Guid = url.Substring(url.LastIndexOf("/", StringComparison.Ordinal) + 1);
-            Url = EvernoteNote.NoteGuidToUrl(Guid);
-            Text = text;
-            if (string.IsNullOrWhiteSpace(Guid))
-            {
-                throw new Exception("Guid can not be empty.");
-            }
-        }
-        
-        public string Text { get; private set; }
-        public string Url { get; private set; }
-        public string Guid { get; private set; }
-    }
-
-
     class EvernoteNote
     {
-        private readonly NoteStore.Client _noteStore;
+        private readonly Evernote _evernote;
         private readonly Note _note;
 
-        public EvernoteNote(NoteStore.Client noteStore, Note note)
+        private string ExternalNoteUrlPrefix
         {
-            _noteStore = noteStore;
+            get { return String.Format("https://www.evernote.com/shard/{0}/nl/{1}/", 
+                _evernote.EvernoteUser.ShardId, _evernote.EvernoteUser.Id); }
+        }
+
+        private string InternalNoteUrlPrefix
+        {
+            get { return String.Format("evernote:///view/{1}/{0}/", _evernote.EvernoteUser.ShardId, _evernote.EvernoteUser.Id); }
+        }
+
+
+        public EvernoteNote(Evernote evernote, Note note)
+        {
+            _evernote = evernote;
             _note = note;
         }
 
@@ -50,7 +41,7 @@ namespace EvernoteBackLinkerCSharp
             set
             {
                 _note.Content = value;
-                _noteStore.updateNote(Consts.EvernoteDevToken, _note);
+                _evernote.NoteStore.updateNote(_evernote.DevToken, _note);
             }
         }
 
@@ -60,7 +51,7 @@ namespace EvernoteBackLinkerCSharp
             set
             {
                 _note.Title = value;
-                _noteStore.updateNote(Consts.EvernoteDevToken, _note);
+                _evernote.NoteStore.updateNote(_evernote.DevToken, _note);
             }
         }
 
@@ -75,7 +66,7 @@ namespace EvernoteBackLinkerCSharp
         private static DateTime UnixTimeStampToDateTime(long unixTimeStamp)
         {
             // Unix timestamp is seconds past epoch
-            DateTime dtDateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, System.DateTimeKind.Utc);
+            DateTime dtDateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
             dtDateTime = dtDateTime.AddMilliseconds(unixTimeStamp).ToLocalTime();
             return dtDateTime;
         }
@@ -96,16 +87,16 @@ namespace EvernoteBackLinkerCSharp
                             let sufix = childNodes[2]
                             where prefix.InnerText == Consts.BacklinkPrefix && sufix.InnerText == Consts.BacklinkSufix
                             where a.Name == "a" && prefix.Name == "#text" && sufix.Name == "#text"
-                            select new NoteLink (text: a.InnerText, url: a.Attributes["href"].Value);
+                            select new NoteLink (a.InnerText, a.Attributes["href"].Value, this);
 
             return UniqueNoteLinks(backlinks);
         }
 
-        private static IEnumerable<NoteLink> UniqueNoteLinks(IEnumerable<NoteLink> backlinks)
+        private IEnumerable<NoteLink> UniqueNoteLinks(IEnumerable<NoteLink> backlinks)
         {
             return from backlink in backlinks
                 group backlink by backlink.Url into groupedLinks
-                select new NoteLink(groupedLinks.First().Text, groupedLinks.Key);
+                select new NoteLink(groupedLinks.First().Text, groupedLinks.Key, this);
         }
 
         public IEnumerable<NoteLink> FindNoteLinks()
@@ -113,14 +104,14 @@ namespace EvernoteBackLinkerCSharp
             HtmlDocument doc = new HtmlDocument();
             doc.LoadHtml(Content);
             
-            var noteLinksXpath = string.Format("//a[starts-with(@href, '{0}') or starts-with(@href, '{1}')]", 
-                Consts.ExternalNoteUrlPrefix, Consts.InternalNoteUrlPrefix);
+            var noteLinksXpath = String.Format("//a[starts-with(@href, '{0}') or starts-with(@href, '{1}')]", 
+                ExternalNoteUrlPrefix, InternalNoteUrlPrefix);
 
             var potentialLinksNodes = doc.DocumentNode.SelectNodes(noteLinksXpath);
             potentialLinksNodes = potentialLinksNodes ?? new HtmlNodeCollection(null);
 
             var noteLinks = from potentialLinks in potentialLinksNodes
-                            select new NoteLink (text: potentialLinks.InnerText, url: potentialLinks.Attributes["href"].Value );
+                            select new NoteLink(potentialLinks.InnerText, potentialLinks.Attributes["href"].Value, this);
             
             noteLinks = UniqueNoteLinks(noteLinks);
             
@@ -139,7 +130,7 @@ namespace EvernoteBackLinkerCSharp
 
         public void AddBacklink(string linkTitle, string linkUrl)
         {
-            var backlinkHtml = string.Format("<div>{0}<a href='{1}' style='color:#69aa35'>{2}</a>{3}</div><br/>", 
+            var backlinkHtml = String.Format("<div>{0}<a href='{1}' style='color:#69aa35'>{2}</a>{3}</div><br/>", 
                 Consts.BacklinkPrefix, linkUrl, linkTitle, Consts.BacklinkSufix);
             this.Content = AppendToContent(backlinkHtml);
         }
@@ -159,9 +150,9 @@ namespace EvernoteBackLinkerCSharp
             }
         }
 
-        public static string NoteGuidToUrl(string guid)
+        public string NoteGuidToUrl(string guid)
         {
-            return String.Format("{0}{1}/{1}/", Consts.InternalNoteUrlPrefix, guid);
+            return String.Format("{0}{1}/{1}/", InternalNoteUrlPrefix, guid);
         }
     }
 }

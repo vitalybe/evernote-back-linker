@@ -13,14 +13,47 @@ namespace EvernoteBackLinkerCSharp
 {
     class Evernote
     {
+        private readonly string _devToken;
         // Can be be initialized after authentication is complete.
         private NoteStore.Client _noteStore;
+        private UserStore.Client _userStore;
+        private User _evernoteUser;
+
+        public Evernote(string devToken)
+        {
+            _devToken = devToken;
+        }
+
+        public string DevToken
+        {
+            get { return _devToken; }
+        }
 
         public NoteStore.Client NoteStore
         {
             get
             {
                 if (_noteStore == null)
+                {
+                    // Get the URL used to interact with the contents of the user's account
+                    // When your application authenticates using OAuth, the NoteStore URL will
+                    // be returned along with the auth token in the final OAuth request.
+                    // In that case, you don't need to make this call.
+                    String noteStoreUrl = UserStore.getNoteStoreUrl(DevToken);
+
+                    TTransport noteStoreTransport = new THttpClient(new Uri(noteStoreUrl));
+                    TProtocol noteStoreProtocol = new TBinaryProtocol(noteStoreTransport);
+                    _noteStore = new NoteStore.Client(noteStoreProtocol);
+                }
+
+                return _noteStore;
+            }
+        }
+        public UserStore.Client  UserStore
+        {
+            get
+            {
+                if (_userStore == null)
                 {
                     Console.WriteLine("Connecting to Evernote...");
 
@@ -29,29 +62,31 @@ namespace EvernoteBackLinkerCSharp
                     Uri userStoreUrl = new Uri("https://" + EVERNOTE_HOST + "/edam/user");
                     TTransport userStoreTransport = new THttpClient(userStoreUrl);
                     TProtocol userStoreProtocol = new TBinaryProtocol(userStoreTransport);
-                    UserStore.Client userStore = new UserStore.Client(userStoreProtocol);
-
-                    bool versionOk =
-                        userStore.checkVersion("Evernote EDAMTest (C#)",
-                           Constants.EDAM_VERSION_MAJOR,
-                           Constants.EDAM_VERSION_MINOR);
+                    
+                    _userStore = new UserStore.Client(userStoreProtocol);
+                    bool versionOk = _userStore.checkVersion("Evernote EDAMTest (C#)",
+                            Constants.EDAM_VERSION_MAJOR,
+                            Constants.EDAM_VERSION_MINOR);
                     if (!versionOk)
                     {
                         throw new Exception("EDAM SDK version is not recent enough. Please update via nuget");
                     }
-
-                    // Get the URL used to interact with the contents of the user's account
-                    // When your application authenticates using OAuth, the NoteStore URL will
-                    // be returned along with the auth token in the final OAuth request.
-                    // In that case, you don't need to make this call.
-                    String noteStoreUrl = userStore.getNoteStoreUrl(Consts.EvernoteDevToken);
-
-                    TTransport noteStoreTransport = new THttpClient(new Uri(noteStoreUrl));
-                    TProtocol noteStoreProtocol = new TBinaryProtocol(noteStoreTransport);
-                    _noteStore = new NoteStore.Client(noteStoreProtocol);
                 }
 
-                return _noteStore;
+                return _userStore;
+            }
+        }
+
+        public User EvernoteUser
+        {
+            get
+            {
+                if (_evernoteUser == null)
+                {
+                    _evernoteUser = UserStore.getUser(DevToken);
+                }
+
+                return _evernoteUser;;
             }
         }
 
@@ -65,8 +100,8 @@ namespace EvernoteBackLinkerCSharp
             EvernoteNote note;
             try
             {
-                var externalNote = NoteStore.getNote(Consts.EvernoteDevToken, noteGuid, true, false, false, false);
-                note = new EvernoteNote(_noteStore, externalNote);
+                var externalNote = NoteStore.getNote(DevToken, noteGuid, true, false, false, false);
+                note = new EvernoteNote(this, externalNote);
             }
             catch (EDAMNotFoundException)
             {
@@ -126,7 +161,7 @@ namespace EvernoteBackLinkerCSharp
 
             do
             {
-                notes = NoteStore.findNotesMetadata(Consts.EvernoteDevToken, filter, offset, pageSize, spec);
+                notes = NoteStore.findNotesMetadata(DevToken, filter, offset, pageSize, spec);
                 foreach (NoteMetadata note in notes.Notes)
                 {
                     yield return FindById(note.Guid);
