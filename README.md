@@ -1,4 +1,4 @@
-## Deprecated
+# Deprecated
 
 I rewrote this in python here and it works better too: https://github.com/vitalybe/evernote-back-linker-2
 
